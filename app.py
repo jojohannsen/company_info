@@ -1,16 +1,48 @@
 from fasthtml.common import *
 import csv
 import io
+import requests
+import os
+import json
 from typing import Optional
 from starlette.responses import Response
 
-# This is a placeholder for whatever "@z.py" actually does to get company addresses
 def get_company_address(company_name: str) -> Optional[str]:
-    # In a real application, this would call the actual address lookup logic
-    # For demonstration, returning dummy addresses based on company name
     if not company_name.strip():
         return None
-    return f"{company_name.strip().title()} HQ, 123 Business St, Industry City, CA 94000"
+    
+    url = "https://api.tavily.com/search"
+    token = os.environ.get('TAVILY_API_KEY')
+    
+    if not token:
+        return f"Error: TAVILY_API_KEY environment variable not set"
+    
+    payload = {
+        "query": f"who is the mailing address for this company: {company_name}?",
+        "topic": "general",
+        "search_depth": "basic",
+        "chunks_per_source": 3,
+        "max_results": 1,
+        "time_range": None,
+        "days": 7,
+        "include_answer": True,
+        "include_raw_content": False,
+        "include_images": False,
+        "include_image_descriptions": False,
+        "include_domains": [],
+        "exclude_domains": []
+    }
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.request("POST", url, json=payload, headers=headers)
+        response_data = json.loads(response.text)
+        return response_data.get('answer', f"No address found for {company_name}")
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 # Add some basic styling
 css = """
