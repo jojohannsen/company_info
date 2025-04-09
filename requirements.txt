@@ -1,1 +1,2 @@
 python-fasthtml==0.12.12
+requests==2.32.3
