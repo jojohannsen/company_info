@@ -21,7 +21,7 @@ def get_company_address(company_name: str) -> Optional[Tuple[str, Optional[str]]
         return (f"Error: TAVILY_API_KEY environment variable not set", None)
     
     payload = {
-        "query": f"who is the mailing address for this company: {company_name}?",
+        "query": f"What is the mailing address for this company: {company_name}?",
         "topic": "general",
         "search_depth": "basic",
         "chunks_per_source": 3,
@@ -54,9 +54,16 @@ def get_company_address(company_name: str) -> Optional[Tuple[str, Optional[str]]
 css = """
 .htmx-indicator {
     display: none;
+    margin: 10px 0;
+    color: #666;
+    font-weight: bold;
 }
 .htmx-request .htmx-indicator {
     display: block;
+}
+.htmx-request .submit-button {
+    pointer-events: none;
+    opacity: 0.5;
 }
 .form-group {
     margin-bottom: 1rem;
@@ -74,6 +81,32 @@ textarea {
 pre {
     white-space: pre-wrap;
     word-wrap: break-word;
+}
+#results {
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+#results.show {
+    opacity: 1;
+}
+.results-container {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+}
+.submit-button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.submit-button:hover {
+    background-color: #0056b3;
 }
 """
 
@@ -93,13 +126,15 @@ def index():
                           placeholder="Enter each company name on a new line\nExample:\nApple Inc\nGoogle\nMicrosoft")),
             cls="form-group"
         ),
-        Button("Get Addresses", type="submit"),
+        Button("Get Addresses", type="submit", cls="submit-button", disabled="true",
+              hx_swap_oob="true",
+              hx_swap="outerHTML",
+              hx_indicator="#loading"),
+        Div("Processing...", id="loading", cls="htmx-indicator"),
         hx_post="/process", 
         hx_target="#results",
         hx_indicator="#loading"
     )
-    
-    loading = Div("Processing...", id="loading", cls="htmx-indicator")
     
     download_btn = A("Download CSV", 
                     id="download-btn", 
@@ -107,15 +142,39 @@ def index():
                     href="/download",
                     download="company_addresses.csv")
 
-    results = Div(id="results")
+    results_container = Div(
+        H2("Results"),
+        Div(id="results"),
+        cls="results-container"
+    )
+    
+    # Add script to enable button only when textarea has content
+    init_script = Script("""
+        document.querySelector('textarea').addEventListener('input', function() {
+            const submitButton = document.querySelector('.submit-button');
+            submitButton.disabled = !this.value.trim();
+            submitButton.textContent = 'Get Addresses';
+        });
+
+        document.querySelector('form').addEventListener('htmx:beforeRequest', function() {
+            const submitButton = document.querySelector('.submit-button');
+            submitButton.textContent = 'Searching...';
+            submitButton.disabled = true;
+        });
+
+        document.querySelector('form').addEventListener('htmx:afterRequest', function() {
+            const submitButton = document.querySelector('.submit-button');
+            submitButton.textContent = 'Get Addresses';
+            submitButton.disabled = false;
+        });
+    """)
     
     return Titled("Company Address Lookup", 
                   P("Enter company names and get their addresses in CSV format."),
-                  form, 
-                  loading,
-                  H2("Results"),
+                  form,
                   download_btn,
-                  results)
+                  results_container,
+                  init_script)
 
 @rt
 def process(companies: str, session):
@@ -144,9 +203,12 @@ def process(companies: str, session):
     csv_str = output.getvalue()
     model_name = "claude-3-7-sonnet-latest"
     agent = Agent(model=Claude(id=model_name))
-    prompt = f"""This CSV string contains columns: company_name, address, source_url. 
-    The 'address' column contains an english sentence that describes the address of the company.  Please change this to contain only the address.
+    prompt = f"""This CSV string contains columns: company_name, address_text, source_url. 
+    The 'address_text' column contains an english sentence that describes the address of the company.  
+    Please extract the street address, city, state, zip, and country from the address_text.
     Return only the modified CSV string, do not include any other text.
+    The output should be in the following format:
+    company_name,street_address,city,state,zip,country,source_url
 
     <ORIGINAL_CSV>
     {csv_str}
@@ -163,7 +225,11 @@ def process(companies: str, session):
     return Div(
         P(f"Found addresses for {len(results)} companies."),
         Pre(csv_str, style="background-color: #f5f5f5; padding: 10px; border-radius: 4px;"),
-        Script("document.getElementById('download-btn').classList.add('show');")
+        Script("""
+            document.getElementById('download-btn').classList.add('show');
+            document.getElementById('results').classList.add('show');
+            document.querySelector('.results-container').scrollIntoView({ behavior: 'smooth' });
+        """)
     )
 
 @rt
@@ -174,7 +240,7 @@ def download(session):
     # Create CSV string
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Company", "Address", "Source URL"])
+    writer.writerow(["Company", "Street Address", "City", "State", "Zip", "Country", "Source URL"])
     writer.writerows(results)
     csv_str = output.getvalue()
     
