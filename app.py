@@ -89,6 +89,9 @@ pre {
 #results.show {
     opacity: 1;
 }
+.page-container {
+    padding: 2rem;
+}
 .page-title {
     font-size: 1.5rem;
     margin-bottom: 0.5rem;
@@ -144,7 +147,7 @@ def index():
             Div(
                 Label("Enter company names (one per line):", 
                       Textarea(id="companies", name="companies", rows=10, cols=50,
-                              placeholder="Enter each company name on a new line\nExample:\nApple Inc\nGoogle\nMicrosoft")),
+                              placeholder="Example:\nApple Inc\nGoogle\nMicrosoft")),
                 cls="form-group"
             ),
             Button("Get Addresses", type="submit", cls="submit-button", disabled="true",
@@ -197,11 +200,12 @@ def index():
         });
     """)
     
-    return Titled("Company Address Lookup",
-                  H1("Company Address Lookup", cls="page-title"),
-                  P("Output format: company_name, street_address, city, state, zip, country, source_url", cls="format-example"),
-                  main_container,
-                  init_script)
+    return Div(
+        H4("Company Address Lookup", cls="page-title"),
+        P("Output format: company_name, street_address, city, state, zip, country, source_url", cls="format-example"),
+        main_container,
+        init_script,
+        cls="page-container")
 
 @rt
 def process(companies: str, session):
