@@ -89,8 +89,28 @@ pre {
 #results.show {
     opacity: 1;
 }
+.page-title {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+.format-example {
+    color: #666;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    font-family: monospace;
+}
+.main-container {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1rem;
+}
+.input-section {
+    flex: 1;
+    min-width: 300px;
+}
 .results-container {
-    margin-top: 20px;
+    flex: 1;
+    min-width: 300px;
     padding: 15px;
     border: 1px solid #dee2e6;
     border-radius: 4px;
@@ -119,33 +139,41 @@ app, rt = fast_app(
 @rt
 def index():
     """Main page with form for company name input and results display"""
-    form = Form(
-        Div(
-            Label("Enter company names (one per line):", 
-                  Textarea(id="companies", name="companies", rows=10, cols=50,
-                          placeholder="Enter each company name on a new line\nExample:\nApple Inc\nGoogle\nMicrosoft")),
-            cls="form-group"
+    input_section = Div(
+        Form(
+            Div(
+                Label("Enter company names (one per line):", 
+                      Textarea(id="companies", name="companies", rows=10, cols=50,
+                              placeholder="Enter each company name on a new line\nExample:\nApple Inc\nGoogle\nMicrosoft")),
+                cls="form-group"
+            ),
+            Button("Get Addresses", type="submit", cls="submit-button", disabled="true",
+                  hx_swap_oob="true",
+                  hx_swap="outerHTML",
+                  hx_indicator="#loading"),
+            Div("Processing...", id="loading", cls="htmx-indicator"),
+            hx_post="/process", 
+            hx_target="#results",
+            hx_indicator="#loading"
         ),
-        Button("Get Addresses", type="submit", cls="submit-button", disabled="true",
-              hx_swap_oob="true",
-              hx_swap="outerHTML",
-              hx_indicator="#loading"),
-        Div("Processing...", id="loading", cls="htmx-indicator"),
-        hx_post="/process", 
-        hx_target="#results",
-        hx_indicator="#loading"
+        A("Download CSV", 
+          id="download-btn", 
+          cls="download-btn",
+          href="/download",
+          download="company_addresses.csv"),
+        cls="input-section"
     )
-    
-    download_btn = A("Download CSV", 
-                    id="download-btn", 
-                    cls="download-btn",
-                    href="/download",
-                    download="company_addresses.csv")
 
     results_container = Div(
         H2("Results"),
         Div(id="results"),
         cls="results-container"
+    )
+
+    main_container = Div(
+        input_section,
+        results_container,
+        cls="main-container"
     )
     
     # Add script to enable button only when textarea has content
@@ -169,11 +197,10 @@ def index():
         });
     """)
     
-    return Titled("Company Address Lookup", 
-                  P("Enter company names and get their addresses in CSV format."),
-                  form,
-                  download_btn,
-                  results_container,
+    return Titled("Company Address Lookup",
+                  H1("Company Address Lookup", cls="page-title"),
+                  P("Output format: company_name, street_address, city, state, zip, country, source_url", cls="format-example"),
+                  main_container,
                   init_script)
 
 @rt
